@@ -18,7 +18,6 @@ from pydub import AudioSegment, silence
 import tempfile
 import torch
 from config import get_config, MODEL_CONFIG, PATHS, AUDIO_CONFIG
-from f5_tts.api import F5TTS
 from f5_tts.model.utils import seed_everything
 
 # Configure logging
@@ -37,7 +36,6 @@ class TTSProcessor:
             reference_voices_file: Path to reference_voices.json file
         """
         self.model = None
-        self.modelF5TTS = None
         self.reference_voices = {}
         
         # Use config values if not provided
@@ -50,8 +48,8 @@ class TTSProcessor:
     
     def load_model(self):
         """Load the TTS model from Hugging Face"""
-        if self.model is not None and self.modelF5TTS is not None:
-            logger.info("Models already loaded")
+        if self.model is not None:
+            logger.info("Model already loaded")
             return
 
         if not self.model:            
@@ -62,11 +60,6 @@ class TTSProcessor:
                 cache_dir=self.cache_dir
             )
             logger.info(f"Model {self.model_repo_id} loaded successfully")
-
-        if not self.modelF5TTS:
-            logger.info(f"Loading F5TTS model using F5TTS_Base...")
-            self.modelF5TTS = F5TTS(model="F5TTS_Base", hf_cache_dir=self.cache_dir)
-            logger.info(f"F5TTS model F5TTS_Base loaded successfully")
 
     def load_reference_voices(self):
         """Load referenceVoices from reference_voices.json file"""
@@ -105,8 +98,6 @@ class TTSProcessor:
         """
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load_model() first.")
-        if self.modelF5TTS is None:
-            raise RuntimeError("F5TTS model not loaded. Call load_model() first.")
 
         if reference_voice_key not in self.reference_voices:
             raise ValueError(f"ReferenceVoices key '{reference_voice_key}' not found")
@@ -136,24 +127,24 @@ class TTSProcessor:
                 ref_audio_path=ref_audio_path,
                 ref_text=reference_voice_info["content"],
             ) 
-        elif reference_voice_info["model"] in ["F5TTS"]:
-            logger.info("using F5TTS model...")
-            # Generate speech using F5TTS model
-            wav = self.modelF5TTS.infer(
-                    ref_file=ref_audio_path,
-                    ref_text=reference_voice_info["content"],
-                    gen_text=text,
-                    target_rms=0.1,
-                    seed=used_seed,
-                    # file_wave=str(files("data").joinpath("out/api_out.wav")),
-                    # file_spec=str(files("data").joinpath("out/api_out.png")),
-            )
-            if wav is None:
-                raise ValueError(f"F5TTS model failed to generate audio")
-            audio = convert_wav_and_remove_silence(audio=wav,  # type: ignore
-                        sample_rate=sample_rate,
-                        )
-            # audio = wav  # Assuming wav is already in the correct format
+        # elif reference_voice_info["model"] in ["F5TTS"]:
+        #     logger.info("using F5TTS model...")
+        #     # Generate speech using F5TTS model
+        #     wav = self.modelF5TTS.infer(
+        #             ref_file=ref_audio_path,
+        #             ref_text=reference_voice_info["content"],
+        #             gen_text=text,
+        #             target_rms=0.1,
+        #             seed=used_seed,
+        #             # file_wave=str(files("data").joinpath("out/api_out.wav")),
+        #             # file_spec=str(files("data").joinpath("out/api_out.png")),
+        #     )
+        #     if wav is None:
+        #         raise ValueError(f"F5TTS model failed to generate audio")
+        #     audio = convert_wav_and_remove_silence(audio=wav,  # type: ignore
+        #                 sample_rate=sample_rate,
+        #                 )
+        #     audio = wav  # Assuming wav is already in the correct format
         else:
             raise ValueError(f"Invalid model type in reference voice info: {reference_voice_info}")
         
