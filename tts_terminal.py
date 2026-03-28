@@ -476,49 +476,45 @@ def cmd_single_tts(
 
 def cmd_interactive_tts(
     processor: TTSProcessor,
+    voice_file: str,
+    text: str,
+    ref_text: str = "",
+    seed: int = -1,
     output_dir: str = "",
 ) -> Dict[str, Any]:
     """
-    Interactive terminal flow for single-shot TTS generation.
+    CLI-driven single-shot TTS generation.
 
-    Prompts the user for:
-      1) reference WAV file path
-      2) optional transcript of the reference WAV
-      3) text to synthesize
-
-    Uses direct model calls via TTSProcessor (no API server).
+    Uses direct model calls via TTSProcessor (no API server), with all
+    parameters supplied via command-line flags.
     """
     print("\n[INTERACTIVE MODE]")
-    print("This mode runs local inference directly (no API/server).")
+    print("This mode runs local inference directly (no API/server) via CLI flags.")
 
-    while True:
-        voice_file = input("Reference WAV file path: ").strip().strip('"').strip("'")
-        if not voice_file:
-            print("[ERROR] Reference WAV path cannot be empty.")
-            continue
-        if not os.path.isfile(voice_file):
-            print(f"[ERROR] File not found: {voice_file}")
-            continue
-        break
+    voice_file = voice_file.strip().strip('"').strip("'")
+    if not voice_file:
+        return {
+            "success": False,
+            "message": "Reference WAV path cannot be empty.",
+            "output_path": None,
+            "filename": None,
+        }
+    if not os.path.isfile(voice_file):
+        return {
+            "success": False,
+            "message": f"File not found: {voice_file}",
+            "output_path": None,
+            "filename": None,
+        }
 
-    ref_text = input("Reference transcript (optional, recommended): ").strip()
-
-    while True:
-        text = input("Text to convert to speech: ").strip()
-        if not text:
-            print("[ERROR] Text cannot be empty.")
-            continue
-        break
-
-    seed_input = input("Seed (optional, press Enter for random): ").strip()
-    if seed_input:
-        try:
-            seed = int(seed_input)
-        except ValueError:
-            print("[WARNING] Invalid seed provided. Using random seed.")
-            seed = -1
-    else:
-        seed = -1
+    text = text.strip()
+    if not text:
+        return {
+            "success": False,
+            "message": "Text cannot be empty.",
+            "output_path": None,
+            "filename": None,
+        }
 
     return cmd_single_tts(
         processor=processor,
@@ -704,9 +700,30 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
 
     # ── interactive ───────────────────────────────────────────────────────
-    sub.add_parser(
+    p_interactive = sub.add_parser(
         "interactive",
-        help="Prompt for reference WAV + text, then generate one WAV file.",
+        help="Generate one WAV using CLI flags (no runtime prompts).",
+    )
+    p_interactive.add_argument(
+        "--voice-file",
+        required=True,
+        help="Path to the reference WAV file.",
+    )
+    p_interactive.add_argument(
+        "--text", "-t",
+        required=True,
+        help="Text to synthesize.",
+    )
+    p_interactive.add_argument(
+        "--ref-text",
+        default="",
+        help="Transcript of the reference WAV (recommended).",
+    )
+    p_interactive.add_argument(
+        "--seed", "-s",
+        type=int,
+        default=-1,
+        help="Random seed for reproducibility (-1 = random, default: -1)",
     )
 
     # ── single ─────────────────────────────────────────────────────────────
@@ -833,8 +850,8 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command is None:
-        # Default UX: running `python tts_terminal.py` enters interactive mode.
-        args.command = "interactive"
+        parser.print_help()
+        sys.exit(2)
 
     print("=" * 62)
     print("  IndicF5 TTS Terminal Runner")
@@ -915,6 +932,10 @@ def main() -> None:
     if args.command == "interactive":
         result = cmd_interactive_tts(
             processor=processor,
+            voice_file=args.voice_file,
+            text=args.text,
+            ref_text=args.ref_text,
+            seed=args.seed,
             output_dir=args.output_dir,
         )
         t_gen_done = time.time()
